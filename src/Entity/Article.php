@@ -2,34 +2,57 @@
 
 namespace App\Entity;
 
-use App\Repository\ArticleRepository;
+use DateTimeImmutable;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\Post;
 use Doctrine\DBAL\Types\Types;
+use ApiPlatform\Metadata\Patch;
 use Doctrine\ORM\Mapping as ORM;
+use ApiPlatform\Metadata\ApiResource;
+use App\Repository\ArticleRepository;
+use ApiPlatform\Metadata\GetCollection;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 #[UniqueEntity('slug')]
+#[ApiResource(
+    operations: [
+        new Get(normalizationContext: ['groups' => ['article:read']]),
+        new GetCollection(),
+        new Patch(),
+        new Post(denormalizationContext: ['groups' => ['article:write']], normalizationContext: ['groups' => ['article:read']])
+    ]
+)]
 class Article
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['article:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['article:read','article:write'])]
     private ?string $title = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['article:write', 'articles:read'])]
     private ?string $description = null;
 
     #[ORM\Column(length: 255, unique: true)]
+    #[Groups(['article:read'])]
     private ?string $slug = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['article:write'])]
     private ?string $body = null;
 
     #[ORM\ManyToOne(inversedBy: 'articles')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['article:read'])]
     private ?User $user = null;
 
     #[ORM\Column]
@@ -39,7 +62,22 @@ class Article
     private ?\DateTimeImmutable $editedAt = null;
 
     #[ORM\Column]
+    #[Groups(['article:write'])]
     private ?\DateTimeImmutable $publishedAt = null;
+
+    // fonction de définition du slug
+    public function computeSlug(SluggerInterface $slugger)
+    {
+        $this->slug = $slugger->slug($this)->lower();
+    }
+
+    // fonction de set createdAt
+    #[ORM\PrePersist]
+    public function setCreatedValue() : void 
+    {
+        $this->createdAt = new DateTimeImmutable; 
+    }
+
 
     public function getId(): ?int
     {
